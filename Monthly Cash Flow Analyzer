@@ -1,0 +1,13 @@
+print("Monthly Cash Flow Analyzer")
+income = int(input("Enter monthly income: "))
+rent = int(input("Enter rent amount: "))
+groceries = int(input("Enter amount spent on groceries: "))
+utilities = int(input("Enter amount spent on other utilities: "))
+expenses = rent + groceries + utilities
+cash_flow = income - expenses
+if cash_flow > 0:
+    print("Well done! Positive cash flow.")
+elif cash_flow < 0:
+    print("Warning: Negative cash flow. Review your expenses.")
+elif cash_flow == 0:
+    print("Oops! Your income and expenses are the same. Review your expenses.")
