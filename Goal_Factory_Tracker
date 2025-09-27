@@ -1,0 +1,325 @@
+from enum import Enum
+from datetime import datetime
+import matplotlib.pyplot as plt
+
+# 1. GoalType Enum: Defines the types of financial goals available.
+class GoalType(Enum):
+    EMERGENCY_FUND = "EmergencyFundGoal"
+    RETIREMENT = "RetirementGoal"
+    PURCHASE = "PurchaseGoal"
+
+# 2. FinancialGoal Base Class: The blueprint for all financial goals.
+class FinancialGoal:
+    def __init__(self, name, target_amount=None):
+        self.name = name
+        self.target_amount = target_amount
+        
+    def calculate_target(self):
+        raise NotImplementedError("Subclass must implement abstract method 'calculate_target'")
+        
+    def __str__(self):
+        return f"Financial Goal: {self.name}, Target: ${self.target_amount:,.2f}"
+
+# 3. Subclasses with specific calculation logic for each goal type.
+class EmergencyFundGoal(FinancialGoal):
+    def __init__(self, name, monthly_expenses, months_to_cover):
+        super().__init__(name)
+        self.monthly_expenses = monthly_expenses
+        self.months_to_cover = months_to_cover
+        self.calculate_target()
+
+    def calculate_target(self):
+        self.target_amount = self.monthly_expenses * self.months_to_cover
+
+class RetirementGoal(FinancialGoal):
+    def __init__(self, name, annual_income_desired, withdrawal_rate=0.04):
+        super().__init__(name)
+        self.annual_income_desired = annual_income_desired
+        self.withdrawal_rate = withdrawal_rate
+        self.calculate_target()
+
+    def calculate_target(self):
+        self.target_amount = self.annual_income_desired / self.withdrawal_rate
+
+class PurchaseGoal(FinancialGoal):
+    def __init__(self, name, item_cost):
+        super().__init__(name)
+        self.item_cost = item_cost
+        self.calculate_target()
+
+    def calculate_target(self):
+        self.target_amount = self.item_cost
+
+# 4. FinancialGoalTracker: Adds tracking functionality to goals.
+class FinancialGoalTracker(FinancialGoal):
+    def __init__(self, financial_goal_instance):
+        super().__init__(financial_goal_instance.name, financial_goal_instance.target_amount)
+        self.type = type(financial_goal_instance).__name__
+        self.contributions = []
+
+    def add_contribution(self, amount):
+        if amount > 0:
+            contribution_record = {
+                "amount": amount,
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            self.contributions.append(contribution_record)
+            print(f"Added ${amount:,.2f} to '{self.name}'.")
+        else:
+            print("Contribution amount must be positive.")
+
+    def calculate_current_amount(self):
+        return sum(c["amount"] for c in self.contributions)
+
+    def get_progress(self):
+        current_amount = self.calculate_current_amount()
+        if self.target_amount > 0:
+            return (current_amount / self.target_amount) * 100
+        return 0
+
+    def get_remaining_needed(self):
+        return max(0, self.target_amount - self.calculate_current_amount())
+
+    def get_contribution_history(self):
+        return self.contributions
+
+    def __str__(self):
+        current_amount = self.calculate_current_amount()
+        progress_percentage = self.get_progress()
+        remaining_needed = self.get_remaining_needed()
+        return (f"Goal: {self.name} ({self.type})\n"
+                f"  Target: ${self.target_amount:,.2f}\n"
+                f"  Current Amount: ${current_amount:,.2f}\n"
+                f"  Progress: {progress_percentage:.2f}%\n"
+                f"  Remaining to Invest: ${remaining_needed:,.2f}")
+
+# 5. GoalFactory: The core of the Factory Method design pattern.
+class GoalFactory:
+    @staticmethod
+    def create_goal(goal_type, **kwargs):
+        if goal_type == GoalType.EMERGENCY_FUND:
+            goal = EmergencyFundGoal(
+                name=kwargs.get("name"),
+                monthly_expenses=kwargs.get("monthly_expenses"),
+                months_to_cover=kwargs.get("months_to_cover")
+            )
+        elif goal_type == GoalType.RETIREMENT:
+            goal = RetirementGoal(
+                name=kwargs.get("name"),
+                annual_income_desired=kwargs.get("annual_income_desired")
+            )
+        elif goal_type == GoalType.PURCHASE:
+            goal = PurchaseGoal(
+                name=kwargs.get("name"),
+                item_cost=kwargs.get("item_cost")
+            )
+        else:
+            raise ValueError(f"Unknown goal type: {goal_type}")
+        
+        return FinancialGoalTracker(goal)
+
+# Helper function for safe user input.
+def get_user_input(prompt, type_func=str):
+    while True:
+        try:
+            return type_func(input(prompt))
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")
+
+# Function for financial projections (Time-to-goal calculation).
+def perform_goal_projection(goal):
+    """Calculates and displays future investment projections."""
+    remaining = goal.get_remaining_needed()
+    if remaining <= 0:
+        print(f"Congratulations! You have already met your goal for '{goal.name}'.")
+        return
+
+    contribution_amounts = [c['amount'] for c in goal.contributions]
+    if not contribution_amounts:
+        print(f"No contributions made to '{goal.name}'. Cannot project completion time.")
+        return
+
+    total_contributed = sum(contribution_amounts)
+    average_contribution = total_contributed / len(contribution_amounts) if len(contribution_amounts) > 0 else 0
+
+    if average_contribution > 0:
+        months_to_go = remaining / average_contribution
+        years = months_to_go // 12
+        months = months_to_go % 12
+        print(f"\nProjection for '{goal.name}':")
+        print(f"Based on your average contribution of ${average_contribution:,.2f} per contribution,")
+        print(f"you will reach your goal in approximately {int(years)} years and {int(months)} months.")
+    else:
+        print("Cannot project completion time, as the average contribution is zero or negative.")
+
+# Function to visualize goal progress using Matplotlib.
+def plot_goal_progress(goals):
+    """Generates a bar chart showing goal progress."""
+    if not goals:
+        print("No goals to plot. Please create some first.")
+        return
+
+    names = [goal.name for goal in goals]
+    current_amounts = [goal.calculate_current_amount() for goal in goals]
+    target_amounts = [goal.target_amount for goal in goals]
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.bar(names, target_amounts, color='lightgray', label='Target Amount')
+    ax.bar(names, current_amounts, color='skyblue', label='Current Amount')
+
+    ax.set_ylabel('Amount ($)')
+    ax.set_title('Financial Goal Progress')
+    ax.legend()
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    
+    plt.show()
+
+# Main program loop: The command-line interface.
+if __name__ == "__main__":
+    financial_goals = []
+    
+    print("Welcome to the Financial Goal Tracker")
+    while True:
+        print("\n---")
+        print("Menu:")
+        print("1. Create a new financial goal")
+        print("2. Add contribution to an existing goal")
+        print("3. View contribution history")
+        print("4. Delete a goal")
+        print("5. View all goals and progress")
+        print("6. Project goal completion time")
+        print("7. Visualize goal progress (Graph)")
+        print("8. Exit")
+        
+        choice = get_user_input("Enter your choice (1-8): ", type_func=int)
+        
+        if choice == 1:
+            print("\nChoose a goal type:")
+            print("1. Emergency Fund")
+            print("2. Retirement")
+            print("3. Purchase")
+            
+            goal_type_choice = get_user_input("Enter your choice (1-3): ", type_func=int)
+            
+            goal = None
+            if goal_type_choice == 1:
+                name = get_user_input("Enter a name for your Emergency Fund: ")
+                monthly_expenses = get_user_input("Enter your monthly expenses: ", type_func=float)
+                months_to_cover = get_user_input("How many months do you want to cover? ", type_func=int)
+                goal = GoalFactory.create_goal(GoalType.EMERGENCY_FUND, name=name, monthly_expenses=monthly_expenses, months_to_cover=months_to_cover)
+            elif goal_type_choice == 2:
+                name = get_user_input("Enter a name for your Retirement Goal: ")
+                annual_income_desired = get_user_input("What is your desired annual retirement income? ", type_func=float)
+                goal = GoalFactory.create_goal(GoalType.RETIREMENT, name=name, annual_income_desired=annual_income_desired)
+            elif goal_type_choice == 3:
+                name = get_user_input("Enter a name for your Purchase Goal: ")
+                item_cost = get_user_input("What is the cost of the item? ", type_func=float)
+                goal = GoalFactory.create_goal(GoalType.PURCHASE, name=name, item_cost=item_cost)
+            
+            if goal:
+                financial_goals.append(goal)
+                print("Goal created successfully!")
+
+        elif choice == 2:
+            if not financial_goals:
+                print("You have no goals to contribute to. Please create one first.")
+                continue
+            
+            print("\nSelect a goal to contribute to:")
+            for i, goal in enumerate(financial_goals):
+                print(f"{i+1}. {goal.name}")
+            
+            goal_index = get_user_input("Enter the number of the goal: ", type_func=int) - 1
+            
+            if 0 <= goal_index < len(financial_goals):
+                amount = get_user_input("Enter the contribution amount from your salary: ", type_func=float)
+                financial_goals[goal_index].add_contribution(amount)
+            else:
+                print("Invalid goal number.")
+        
+        elif choice == 3:
+            if not financial_goals:
+                print("You have no goals. Please create one first.")
+                continue
+            
+            print("\nSelect a goal to view contribution history:")
+            for i, goal in enumerate(financial_goals):
+                print(f"{i+1}. {goal.name}")
+            
+            goal_index = get_user_input("Enter the number of the goal: ", type_func=int) - 1
+            
+            if 0 <= goal_index < len(financial_goals):
+                goal = financial_goals[goal_index]
+                if not goal.get_contribution_history():
+                    print(f"No contributions found for '{goal.name}'.")
+                else:
+                    print(f"\nContribution History for '{goal.name}':")
+                    for contrib in goal.get_contribution_history():
+                        print(f"  - ${contrib['amount']:,.2f} on {contrib['date']}")
+            else:
+                print("Invalid goal number.")
+
+        elif choice == 4:
+            if not financial_goals:
+                print("You have no goals to delete.")
+                continue
+            
+            print("\nSelect a goal to delete:")
+            for i, goal in enumerate(financial_goals):
+                print(f"{i+1}. {goal.name}")
+            
+            try:
+                goal_index_to_delete = get_user_input("Enter the number of the goal to delete: ", type_func=int) - 1
+                if 0 <= goal_index_to_delete < len(financial_goals):
+                    deleted_goal = financial_goals.pop(goal_index_to_delete)
+                    print(f"Goal '{deleted_goal.name}' has been deleted successfully.")
+                else:
+                    print("Invalid goal number.")
+            except IndexError:
+                print("Invalid goal number.")
+
+        elif choice == 5:
+            if not financial_goals:
+                print("You have no goals to display.")
+            else:
+                print("\nYour Financial Goals:")
+                for goal in financial_goals:
+                    print("-" * 25)
+                    print(goal)
+                print("-" * 25)
+        
+        elif choice == 6:
+            if not financial_goals:
+                print("You have no goals to project. Please create one and add a contribution.")
+                continue
+            
+            print("\nSelect a goal for projection:")
+            for i, goal in enumerate(financial_goals):
+                print(f"{i+1}. {goal.name}")
+            
+            goal_index = get_user_input("Enter the number of the goal: ", type_func=int) - 1
+            
+            if 0 <= goal_index < len(financial_goals):
+                goal = financial_goals[goal_index]
+                perform_goal_projection(goal)
+            else:
+                print("Invalid goal number.")
+        
+        elif choice == 7:
+            plot_goal_progress(financial_goals)
+            # Re-display the goal list after the user closes the graph
+            if financial_goals:
+                print("\nYour Financial Goals:")
+                for goal in financial_goals:
+                    print("-" * 25)
+                    print(goal)
+                print("-" * 25)
+
+        elif choice == 8:
+            print("Exiting the program. ")
+            break
+            
+        else:
+            print("Invalid choice. Please try again.")
